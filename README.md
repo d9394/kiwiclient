@@ -104,4 +104,8 @@ It provides the following methods which can be used in derived classes:
 * There is an octave extension for reading such WAV files, see `read_kiwi_wav.cc` where the details of the non-standard WAV chunk can be found; it needs to be compiled in this way: `mkoctfile read_kiwi_wav.cc`.
 * For using read_kiwi_wav an octave function `proc_kiwi_iq_wav.m` is provided; type `help proc_kiwi_iq_wav` in octave for documentation.
 
+
+### Command to start receive a FAX
+* get_kiwifax.sh -s kiwi.test.com -f 12786 -C NMC -D -o   
+
 [end-of-document]
