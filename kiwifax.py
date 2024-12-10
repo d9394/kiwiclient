@@ -346,20 +346,24 @@ class KiwiFax(KiwiSDRStream):
             self._switch_state('printing')
 
     def _switch_state(self, new_state):
-        logging.info("Switching to: %s", new_state)
+        logging.warning("Switching to: %s", new_state)
         self._state = new_state
         if new_state == 'idle':
             self._startstop_score = 0
             self._noise_score = 0
             self._histoa.clear()
             self._histob.clear()
+            if self._options.once :
+                logging.warning("One Page Received, Exit")
+                #raise Exception("One Page Received")
+                sys.exit(0)
         elif new_state == 'starting':
             pass
         elif new_state == 'phasing':
             self._new_roll()
             self._phasing_count = 0
         elif new_state == 'printing':
-            self._startstop_score = 0
+            self._startstop_score = 1
         elif new_state == 'stopping':
             pass
 
@@ -488,13 +492,13 @@ class KiwiFax(KiwiSDRStream):
                 detect_startstop = True
             else:
                 peak_bin_relative = peak_bin + self._tuning_offset - self._startstop_center_bin
-                if math.fabs(peak_bin_relative - self._stop_delta) < self._ss_tone_width:
+                if math.fabs(peak_bin_relative - self._stop_delta) < self._ss_tone_width * 1.2 :
                     detect_stopL = True
-                if math.fabs(peak_bin_relative + self._stop_delta) < self._ss_tone_width:
+                if math.fabs(peak_bin_relative + self._stop_delta) < self._ss_tone_width * 1.2:
                     detect_stopH = True
-                if math.fabs(peak_bin_relative - self._start576_delta) < self._ss_tone_width:
+                if math.fabs(peak_bin_relative - self._start576_delta) < self._ss_tone_width * 1.2:
                     detect_start576L = True
-                if math.fabs(peak_bin_relative + self._start576_delta) < self._ss_tone_width:
+                if math.fabs(peak_bin_relative + self._start576_delta) < self._ss_tone_width * 1.2:
                     detect_start576H = True
         detect_start576 = detect_startstop and detect_start576L and detect_start576H
         detect_stop = detect_startstop and detect_stopL and detect_stopH
@@ -509,14 +513,14 @@ class KiwiFax(KiwiSDRStream):
             "sS"[detect_startstop], '-5'[detect_start576L], '-5'[detect_start576H], "xX"[detect_stopL], "xX"[detect_stopH])
         # Decide
         if self._state == 'idle':
-            if self._startstop_score >= 10:
+            if self._startstop_score >= 8:
                 logging.critical("START DETECTED")
                 self._switch_state('starting')
         elif self._state == 'starting':
             if self._startstop_score < 3:
                 self._switch_state('phasing')
         elif self._state == 'printing':
-            if self._startstop_score >= 10:
+            if self._startstop_score >= 8:
                 logging.critical("STOP DETECTED")
                 self._switch_state('stopping')
         elif self._state == 'stopping':
@@ -530,6 +534,8 @@ class KiwiFax(KiwiSDRStream):
         self._output_name = '%s_%d' % (ts, int(self._options.frequency * 1000))
         if self._options.station:
             self._output_name += '_' + self._options.station
+        if self._options.path:
+            self._output_name = os.path.join(self._options.path, self._output_name)
 
     def _process_pixels(self, samples):
         if not self._state in ('phasing', 'printing', 'stopping'):
@@ -670,7 +676,10 @@ def main():
                       dest='iq_mode',
                       action='store_true', default=False,
                       help='IQ data mode')
-
+    parser.add_option('-O', '--once',
+                      dest='once',
+                      action='store_true', default=False,
+                      help='Only receive one page, then exit')
     parser.add_option('-f', '--freq',
                       dest='frequency',
                       type='float', default=4610,
@@ -683,6 +692,10 @@ def main():
                       dest='force',
                       action='store_true', default=False,
                       help='Force the decoding without waiting for start tone or phasing')
+    parser.add_option('-d', '--debug',
+                      dest='debug',
+                      action='store_true', default=False,
+                      help='Show DEBUG info and write DEBUG to logfile')
     parser.add_option('--force-offset', '--force_offset',
                       dest='force_offset',
                       type='int', default=0,
@@ -728,7 +741,10 @@ def main():
                       default=False,
                       action='store_true',
                       help='Print "ADC OV" message when Kiwi ADC is overloaded')
-
+    parser.add_option('--path', '--path',
+                      dest='path',
+                      type='string', default=None,
+                      help='Save output file to path')
     (options, unused_args) = parser.parse_args()
     options.ws_timestamp = int(time.time() + os.getpid()) & 0xffffffff
     options.raw = False
@@ -742,17 +758,25 @@ def main():
     # Setup logging
     fmtr = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', '%Y%m%dT%H%MZ')
     fmtr.converter = time.gmtime
-    fh = logging.FileHandler('log_%s_%d_%d.log' % (options.server_host, options.server_port, int(options.frequency * 1000)))
-    fh.setLevel(logging.DEBUG)
+    fh = logging.FileHandler('/Logs/log_%s_%d_%s_%d.log' % (options.server_host, options.server_port, time.strftime("%Y%m%d_%H%M"), int(options.frequency * 1000)),mode='w')
+    if options.debug :      #写log文件级别设置
+        fh.setLevel(logging.DEBUG)      
+    else :
+        fh.setLevel(logging.WARNING)
     fh.setFormatter(fmtr)
     ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
+    if options.debug :      #前台输出级别设置
+        ch.setLevel(logging.DEBUG)
+    else :
+        ch.setLevel(logging.WARNING)
     ch.setFormatter(fmtr)
     rootLogger = logging.getLogger()
-    rootLogger.setLevel(logging.INFO)
-    #rootLogger.setLevel(logging.DEBUG)
-    rootLogger.addHandler(fh)
-    rootLogger.addHandler(ch)
+    if options.debug :
+        rootLogger.setLevel(logging.DEBUG)
+    else :
+        rootLogger.setLevel(logging.WARNING)
+    rootLogger.addHandler(fh)   #写文件
+    rootLogger.addHandler(ch)   #写前台
 
     logging.critical('* * * * * * * *')
     logging.critical('Logging started')
@@ -791,6 +815,7 @@ def main():
             time.sleep(15)
             continue
         except Exception as e:
+            logging.error("recorder run() raise error : %s" % e)
             traceback.print_exc()
             break
     recorder.close()
