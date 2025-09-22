@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Emulates a subset of the hamlib rigctld interface, allowing programs
 # like fldigi and wsjtx to query and change the frequency and mode of
@@ -117,7 +117,7 @@ class Rigctld(object):
                 newfreq = command[7:]
                 freq = float(newfreq) / 1000
             except:
-                print("could not decode frequency from {command}")
+                print("could not decode frequency from %s" % command)
                 return "RPRT -1\n"
 
         try:

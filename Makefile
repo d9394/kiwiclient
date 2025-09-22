@@ -3,6 +3,8 @@
 #
 
 PY = python3
+#PY = python3.13
+#PY = python3.12
 
 # set global environment variables KIWI_HOST and KIWI_PORT to the Kiwi you want to work with
 ifeq ($(KIWI_HOST)x,x)
@@ -80,7 +82,6 @@ wspr2:
 # "--ext-test" uses test file built-in to DRM extension
 
 HP_DRM = $(HP)
-#HP_DRM = -s websdr.uk -p 8079
 
 F_DRM = $(F_PB)
 #F_DRM = -f 15785
@@ -166,45 +167,71 @@ faxiq:
 
 
 # Two separate IQ files recording in parallel
-HOST_IQ1 = fenu-radio.ddns.net
-HOST_IQ2 = southwest.ddns.net
+HOST_IQ1 = 
+HOST_IQ2 = 
 
 two:
 	$(KREC) -s $(HOST_IQ1),$(HOST_IQ2) -p ($PORT) -f 77.5,60 --station=DCF77,MSF -m iq -L -5000 -H 5000
 
 
-# real mode (non-IQ) file
+# real & iq mode file
 # Should playback using standard .wav file player
 
-real:
+re real:
 	$(KREC) $(HP) $(F_PB) --tlimit=10 --log-level=debug
-#	$(KREC) $(HP_WESSEX) $(F_PB) --tlimit=10 --log-level=debug
+rere:
+	$(KREC) $(HP) $(F_PB) --tlimit=10 --log-level=debug -r 6000
+iq:
+	$(KREC) $(HP) $(F_PB) -m iq --tlimit=10 --log_level=debug
+iqre:
+	$(KREC) $(HP) $(F_PB) -m iq --tlimit=10 --log_level=debug -r 6000
 lsb:
-	$(KREC) $(HP) -f 7200 -m lsb --tlimit=10 --log-level=debug
+	$(KREC) $(HP) $(F_PB) -m lsb --tlimit=10 --log-level=debug
 ncomp:
 	$(KREC) $(HP) $(F_PB) --ncomp
 rx8:
 #	$(KREC) $(H8) $(F_PB) --launch-delay=15 --socket-timeout=120 -u krec-RX8
 	$(KREC) $(H8) $(F_PB) -u krec-RX8
 nb:
-	$(KREC) $(HP) $F -m usb --tlimit=10 --nb --nb-gate=200 --nb-th=40
+	$(KREC) $(HP) $(F_PB) -m usb --tlimit=10 --nb --nb-gate=200 --nb-th=40
 nbtest:
-	$(KREC) $(HP) $F -m usb --tlimit=10 --nb-test --nb --nb-gate=256 --nb-th=16
+	$(KREC) $(HP) $(F_PB) -m usb --tlimit=10 --nb-test --nb --nb-gate=256 --nb-th=16
 2sec:
 	$(KREC) $(HP) $(F_PB) -q --log-level=info --dt-sec=2 
 debug:
 	$(KREC) $(HP) $(F_PB) --tlimit=10 --test-mode --log_level=debug
-#	$(KREC) -s ai,kiwi -p 8073,8074 --filename=wwv1,wwv2 -f 10000 --user=wwv1,wwv2 -m am --tlimit=60 --log-level=info
-#	$(KREC) -s ai -p 8073 -f 10000 --user=wwv1 -m am --tlimit=60 --log-level=debug
 modes:
-	$(KREC) $(HP) -m iq  --tlimit=4 --log_level debug
-	$(KREC) $(HP) -m sal --tlimit=4 --log_level debug
-	$(KREC) $(HP) -m sas --tlimit=4 --log_level debug
-	$(KREC) $(HP) -m qam --tlimit=4 --log_level debug
+	$(KREC) $(HP) $(F_PB) -m iq  --tlimit=10 --log_level debug
+	$(KREC) $(HP) $(F_PB) -m sam --tlimit=10 --log_level debug
+	$(KREC) $(HP) $(F_PB) -m sau --tlimit=10 --log_level debug
+	$(KREC) $(HP) $(F_PB) -m sal --tlimit=10 --log_level debug
+	$(KREC) $(HP) $(F_PB) -m sas --tlimit=10 --log_level debug
+	$(KREC) $(HP) $(F_PB) -m qam --tlimit=10 --log_level debug
+
+
+# squelch
+SQ_F_PB = -f 10000 -m cw
+#SQ_F_PB = -f 4037.5 -m usb
+#SQ_F_PB = -f 4788.5 -m usb
+
+squelch sq:
+	$(KREC) $(HP) $(SQ_F_PB) -T 20 --log_level=info #--test-mode
+
+
+# scanning
+SCAN = $(HP) --log_level=info
+
+scan:
+	$(KREC) $(SCAN) -m amn --scan-yaml=scan_continuous.yaml
+
+scan-sm:
+	$(KREC) $(SCAN) -m amn --scan-yaml=scan_continuous.yaml --S-meter=0 --sound --not-quiet
+
+scan-sq:
+	$(KREC) $(SCAN) -m usb --scan-yaml=scan_squelch.yaml
 
 
 # wideband
-HP_WESSEX = -s wessex.zapto.org -p 8074
 wbr:
 	@rm -f *.wav
 	$(KREC) $(HP)    -f 10000 -m iq --ncomp --station=wb --tlimit=30 --log_level debug --nolocal
@@ -215,7 +242,7 @@ wb:
 
 wbw:
 	@rm -f *.wav
-	$(KREC) $(HP_WESSEX) -f 14035 -m iq --ncomp --station=wb --tlimit=10 --log_level debug --wb
+	$(KREC) $(HP) -f 14035 -m iq --ncomp --station=wb --tlimit=10 --log_level debug --wb
 
 ncwb:
 	@rm -f *.wav
@@ -224,18 +251,18 @@ ncwb:
 
 ncw:
 	@rm -f *.wav
-#	@mkfifo pipe.wav
-#	$(KREC) $(HP_WESSEX) --nc -m iq -f 14035 --nc-wav --tlimit=10 --log=debug --wb >nc.wav
+#	$(KREC) $(HP) --nc -m iq -f 14035 --nc-wav --tlimit=10 --log=debug --wb >nc.wav
 
 ncwp:
-	$(KREC) $(HP_WESSEX) --nc -m iq -f 14035 --nc-wav --tlimit=10 --log=debug --wb >pipe.wav
+#	@mkfifo pipe.wav
+	$(KREC) $(HP) --nc -m iq -f 14035 --nc-wav --tlimit=10 --log=debug --wb >pipe.wav
 
 
 # resampling
 resample:
-	$(KREC) $(HP) $(F_PB) -r 12000 --tlimit=5
+	$(KREC) $(HP) $(F_PB) -r 6000 --tlimit=10
 resample_iq:
-	$(KREC) $(HP) $(F_PB) -r 6000 -m iq --tlimit=5
+	$(KREC) $(HP) $(F_PB) -r 6000 -m iq --tlimit=10
 
 samplerate_build:
 	@echo "See README file for complete build instructions."
@@ -262,54 +289,42 @@ foff:
 
 # S-meter
 
-s_meter:
-sm:
-	$(KREC) $(HP) $(F_PB) --s-meter=10
-	$(KREC) $(HP) $(F_PB) --s-meter=10 -m iq
-s_meter_timed:
-smt:
-	$(KREC) $(HP) $(F_PB) --s-meter=10 --stats
-	$(KREC) $(HP) $(F_PB) --s-meter=10 --ncomp --stats
-	$(KREC) $(HP) $(F_PB) --s-meter=10 -m iq --stats
+# --freq-pbc means -f frequency is "passband center" freq for SSB/CW modes, not carrier/dial freq
+#F_PB_SM = $(F_PB) --freq-pbc
+F_PB_SM = -f 10000 --freq-pbc -m cwn
+#F_PB_SM = -f 10000 --freq-pbc -m usb
 
-s_meter_stream:
-sms:
-	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=3
-#	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=3 --stats --tstamp
-#	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=3 --stats --tstamp --sdt-sec=1
-s_meter_stream_timed:
-smst:
-	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=5 --stats
-	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=5 --ncomp --stats
-	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=5 -m iq --stats
+s_meter sm:
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=10
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=10 -m iq
+s_meter_timed smt:
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=10 --stats
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=10 --ncomp --stats
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=10 -m iq --stats
 
-s_meter_stream_timestamps:
-smts:
-	$(KREC) $(HP) $(F_PB) --s-meter=0 --tlimit=5 --stats --tstamp
+s_meter_stream sms:
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=3
+#	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=3 --stats --tstamp
+#	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=3 --stats --tstamp --sdt-sec=1
+s_meter_stream_timed smst:
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=5 --stats
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=5 --ncomp --stats
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=5 -m iq --stats
 
-s_meter_stream_interval:
-smsi:
-	$(KREC) $(HP) $(F_PB) --s-meter=0 --tstamp --sdt-sec=1 --stats --log-level=info --dt-sec=4 --snd
+s_meter_stream_timestamps smts:
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tlimit=5 --stats --tstamp
+
+s_meter_stream_interval smsi:
+	$(KREC) $(HP) $(F_PB_SM) --s-meter=0 --tstamp --sdt-sec=1 --stats --log-level=info --dt-sec=4 --snd
 
 
 # TDoA debugging
 H_TDOA = $(HP)
-
-# Kiwi-2 v1.653
-#H_TDOA = -s wessex.zapto.org -p 8074
-
-# Kiwi-1 v1.646
-#H_TDOA = -s kiwisdr.oh6ai.fi -p 8073
-
-# Kiwi-1 v1.633 3ch
-#H_TDOA = -s wessex.hopto.org -p 8075
-
 F_TDOA = -f 77.5 -m iq -L 500 -H 500 --kiwi-wav --kiwi-tdoa -u TDoA_service
 
 tdoa:
 	$(KREC) $(H_TDOA) $(F_TDOA) --tlimit=60 --log-level=debug
 #	$(KREC) $(H_TDOA) $(F_TDOA) --tlimit=30 --log-level=debug --devel=0:1.005e-6,1:0
-#	$(KREC) --quiet $(F_TDOA) -s kiwisdr.ddnss.de,91.8.102.123,kiwisdr.inf.dhbw-ravensburg.de -p 8073,8073,8073 --station=DL6ECS,DE1LON,DK0TE-JN47rp --tlimit=30 --log-level=info
 
 
 # check an iq .wav file recorded with --kiwi-wav
@@ -319,7 +334,7 @@ wav:
 
 
 # check an iq .wav file recorded with --kiwi-wav
-# make wav f=*.wav
+# make proc f=*.wav
 proc: oct/read_kiwi_iq_wav.oct
 	octave-cli --eval "proc_kiwi_iq_wav('$(f)',255)"
 
@@ -397,29 +412,27 @@ slots14:
 	$(KREC) --station=13 $(T_PARAMS) &
 	$(KREC) --station=14 $(T_PARAMS) &
 
-no_api_snd:
-	$(KREC) $(HP) --no-api $(F_PB) --test-mode --log_level debug --nolocal
-no_api_snd_wf:
-	$(KREC) $(HP) --snd --wf --no-api --test-mode --log_level debug --nolocal
-no_api_wf:
-	$(KREC) $(HP) --wf --no-api --user=spaces --log_level debug --nolocal
-no_api_user:
-	$(KREC) $(HP) --no-api --user=no_api_test --log_level debug --nolocal
+BAD =  --test-mode --log_level=debug --nolocal --tlimit=30
+no-api-snd:
+	$(KREC) $(HP) $(F_PB) --no-api --bad-cmd --user=bad $(BAD)
+no-api-snd-wf:
+	$(KREC) $(HP) --snd --wf --no-api --bad-cmd --user=bad2 $(BAD)
+no-api-wf:
+	$(KREC) $(HP) --wf --no-api --bad-cmd --user=spaces $(BAD)
+no-api-user:
+	$(KREC) $(HP) --no-api --user=no_api_test $(BAD)
+no-api-ext:
+	$(KREC) $(HP) --no-api --bad-cmd --ext=DRM --test-mode --quiet --snd $(BAD)
+no-user:
+	$(KREC) $(HP) --no-api --user=none $(BAD)
 
 
 # IQ file with GPS timestamps
 
 gps:
-	$(KREC) $(HP) -f 77.5  -L -5000 -H 5000 -m iq --station=DCF77 --kiwi-wav --log_level info
+	$(KREC) $(HP) -f 77.5  -L -5000 -H 5000 -m iq --fn=gps --kiwi-wav --log_level info --tlimit=30
 gps2:
 	$(KREC) $(HP) $F -m iq -L -5000 -H 5000 --kiwi-wav
-
-
-# IQ file without GPS timestamps
-# Should playback using standard .wav file player
-
-iq:
-	$(KREC) $(HP) $(F_PB) -m iq --tlimit=10 --log_level=debug -r 12000
 
 
 # ALE 2G testing
@@ -437,32 +450,32 @@ kcd:
 #	$(PY) kiwiclientd.py $(HP) -f 24000 -m usb --rigctl-port=6400 --log_level info --tlimit=5
 #	$(PY) kiwiclientd.py $(HP) -f 24000 -m iq --rigctl-port=6400 --log_level info --tlimit=5 --if=200
 #	$(PY) kiwiclientd.py $(HP) -f 24001.16 -m cwn --rigctl-port=6400 --log_level debug --tlimit=5 
-	$(PY) kiwiclientd.py $(HP) -f 24001.66 --pbc -m cwn --enable-rigctl --rigctl-port=6400 --log_level debug --tlimit=5 
+	$(PY) kiwiclientd.py $(HP) -f 14670 -m usb --enable-rigctl --rigctl-port=6400 --log_level debug --tlimit=30
+#	$(PY) kiwiclientd.py $(HP) -f 10136 -m usb --enable-rigctl --rigctl-port=6400 --log_level debug --tlimit=30
 #	$(PY) kiwiclientd.py $(HP) -f 24000.7 --pbc -m am -L -500 -H 500 --log_level debug --tlimit=5 
 #	$(PY) kiwiclientd.py $(HP) -f 24001.7 -m am -L -500 -H 500 --log_level debug --tlimit=5 
 
 
 # time stations
 
-BPC_HOST = -s railgun.proxy.kiwisdr.com -p 8073
+BPC_HOST = $(HP)
 bpc:
 #	$(KREC) $(BPC_HOST) -f 68 -m iq -L 470 -H 530 --fn=BPC_cwn60_iq --tlimit=665 --log_level info
 	$(KREC) $(BPC_HOST) -f 68 -m iq -L 470 -H 530 --fn=BPC_cwn60_iq --tlimit=195 --log_level info
 
-#JJY_HOST = -s railgun.proxy.kiwisdr.com -p 8073
-JJY_HOST = -s 202.127.177.27 -p 8074
+JJY_HOST = $(HP)
 jjy:
 	$(KREC) $(JJY_HOST) -f 39.5 -m iq -L 470 -H 530 --fn=JJY_cwn60_iq --tlimit=195 --log_level info
 
-RTZ_HOST = -s irk.proxy.kiwisdr.com -p 8073
+RTZ_HOST = $(HP)
 rtz:
 	$(KREC) $(RTZ_HOST) -f 49.6 -m iq -L 485 -H 515 --fn=RTZ_cwn30_iq --tlimit=195 --log_level info
 
-MSF_HOST = -s stucapon.plus.com -p 8073
+MSF_HOST = $(HP)
 msf:
 	$(KREC) $(MSF_HOST) -f 59.5 -m iq -L 470 -H 530 --fn=MSF_cwn60_iq --tlimit=15 --log_level info
 
-WWVB_HOST = -s lounix.net -p 8073
+WWVB_HOST = $(HP)
 wwvb:
 	$(KREC) $(WWVB_HOST) -f 59.5 -m iq -L 497 -H 503 --fn=WWVB_cwn6_iq --tlimit=195 --log_level info
 
@@ -479,8 +492,8 @@ ssn:
 # process waterfall data
 
 wf:
-#	$(KREC) --wf $(HP) -f 15000 -z 0 --log_level info -u krec-WF --tlimit=5
-	$(KREC) --wf $(HP) -f 5600 -z 10 --log_level info --tlimit=20 --nolocal
+	$(KREC) --wf $(HP) -f 15000 -z 0 --log_level info -u krec-WF --tlimit=5
+#	$(KREC) --wf $(HP) -f 5600 -z 10 --log_level info --tlimit=20 --nolocal
 #	$(KREC) --wf $(HP) -f 9650 -z 4 --log_level debug -u krec-WF --tlimit=60
 
 wf2:
@@ -492,6 +505,13 @@ wf-png:
 wf-peaks:
 	$(KREC) --wf $(HP) -f 15000 -z 0 --log_level info -u krec-WF --tlimit=2 --mindb=-100 --maxdb=-20 --nq --speed=1 --wf-peaks=5
 #	$(KREC) --wf $(HP) -f 1000 -z 4 --log_level info -u krec-WF --tlimit=5 --mindb=-100 --maxdb=-20 --nq --speed=1 -wf-peaks=5
+
+
+SNR = $(HP)
+
+snr:
+	$(KREC) --wf $(SNR) -f 15000 -z 0 --log_level=debug -u ZL4VO-snr --tlimit=15 --snr=5
+#	$(KREC) --wf $(SNR) -f 10000 -z 1 --log_level=info -u ZL4VO-snr --tlimit=15 --snr=5
 
 micro:
 #	$(PY) microkiwi_waterfall.py --help
@@ -505,24 +525,51 @@ micro:
 # stream a Kiwi connection in a "netcat" style fashion
 
 H_NC = $(HP)
-#H_NC = $(HP_WESSEX)
+F_NC = $(F_PB)
 
 nc:
+	$(KREC) --nc $(H_NC) $(F_NC) --tlimit=10 --log=debug --nc-wav --progress >nc.wav
+#	$(KREC) --nc $(H_NC) $(F_NC) --tlimit=10 --log=info --nc-wav --progress >nc.wav
+#	$(KREC)      $(H_NC) $(F_NC) --tlimit=10 --log=debug 
+
+nciq:
+	$(KREC) --nc $(H_NC) $(F_NC) -m iq --tlimit=10 --log=debug --nc-wav --progress >nciq.wav
+
 #	$(KREC) --nc $(H_NC) $(F_PB) -m am --progress --log_level info --tlimit=3
 #	$(KREC) --nc $(H_NC) -m iq -f $(HFDL_FREQ) --agc-yaml fast_agc.yaml --progress --tlimit=3 --log=debug
-	$(KREC) --nc $(H_NC) -m usb -f $(HFDL_FREQ) --progress --tlimit=25 --log=debug --nolocal
 #	$(KREC) --nc $(H_NC) -m usb -f $(HFDL_FREQ) --progress --tlimit=25 --log=debug --nolocal
 #	$(KREC) --nc $(H_NC) -m usb -f $(HFDL_FREQ) --progress --tlimit=25 --log=debug --nolocal -u foo
-#	$(KREC) --nc $(H_NC) -m cw -f $(HFDL_FREQ) --progress --tlimit=3 --log=debug --waterfall
+#	$(KREC) --nc $(H_NC) -m cw -f $(HFDL_FREQ) --progress --tlimit=3 --log=debug --wf
 
-kr_nc:
-	$(KREC) --nc $(H_NC) -m cw -f $(HFDL_FREQ) --progress --tlimit=3 --log=debug
-#	$(KREC) --nc $(H_NC) -m cw -f $(HFDL_FREQ) --progress --tlimit=3 --log=debug --waterfall -z 7
+ncre:
+	$(KREC) --nc $(H_NC) $(F_NC) --tlimit=10 --log=debug --nc-wav --progress -r 6000 >ncre.wav
 
+nciqre:
+	$(KREC) --nc $(H_NC) $(F_NC) -m iq --tlimit=10 --log=debug --nc-wav --progress -r 6000 >nciqre.wav
+
+ncwf:
+	$(KREC) --wf $(HP) $(F_NC) -z 0 --log_level info -u krec-WF --tlimit=5 --nq --progress --nc >ncwf.nc
+
+
+# camping
+CAMP = --station=$(HOST) --nc --nc-wav --log=debug --camp=0
+
+camp:
+	$(KREC) $(HP) $(CAMP) --tlimit=10 --progress >camp.wav
+campre:
+	$(KREC) $(HP) $(CAMP) --tlimit=10 --progress -r 6000 >campre.wav
+camp20:
+	$(KREC) $(HP) $(CAMP) --tlimit=20 --progress >camp.wav
+camp60:
+	$(KREC) $(HP) $(CAMP) --tlimit=60 --progress >camp.wav
+
+
+# streaming to dumphfdl
+#
 # Use of an HFDL-optimized passband (e.g. "-L 300 -H 2600") is not necessary here
 # since dumphfdl does its own filtering. However the Kiwi HFDL extension does have it so you
 # don't have to listen to noise and interference from the opposite sideband.
-HFDL_HOST = -s stucapon.plus.com -p 8073
+HFDL_HOST = $(HP)
 HFDL_FREQ = 5720
 
 dumphfdl:
@@ -535,6 +582,7 @@ dumphfdl_agc_yaml:
 	dumphfdl --iq-file - --sample-rate 12000 --sample-format CS16 --read-buffer-size 9600 \
 	--centerfreq $(HFDL_FREQ) $(HFDL_FREQ)
 
+
 tun:
 	mkfifo /tmp/si /tmp/so
 	nc -l localhost 1234 >/tmp/si </tmp/so &
@@ -546,7 +594,7 @@ tun:
 cto:
 	$(KREC) -s 1.2.3.4 -m am -f 10000  --socket-timeout 1 --connect-timeout=1 --connect-retries=5
 bto:
-	$(KREC) -s vr2bg.proxy.kiwisdr.com -m am -f 10000  --busy-timeout=2 --busy-retries=3
+	$(KREC) $(HP) -m am -f 10000  --busy-timeout=2 --busy-retries=3
 
 
 # for copying to remote hosts
@@ -579,7 +627,7 @@ help h:
 	$(KREC) --help
 
 clean:
-	-rm -f *.log *.wav *.png *.txt *.npy
+	-rm -f *.log *.wav *.png *.txt *.npy *.nc
 
 clean_dist: clean
 	-rm -f *.pyc */*.pyc oct/*.oct

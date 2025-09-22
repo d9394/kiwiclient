@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ## -*- python -*-
 #
 # Streams sound from a kiwisdr channel to a (virtual or not) sound card,
@@ -114,7 +114,7 @@ class KiwiSoundRecorder(KiwiSDRStream):
                     self._output_sample_rate, self._ifreq, self._ifreq * 4))
         self._init_player()
 
-    def _process_audio_samples(self, seq, samples, rssi):
+    def _process_audio_samples(self, seq, samples, rssi, fmt):
         if self._options.quiet is False:
             sys.stdout.write('\rBlock: %08x, RSSI: %6.1f' % (seq, rssi))
             sys.stdout.flush()
@@ -139,7 +139,7 @@ class KiwiSoundRecorder(KiwiSDRStream):
         fsamples /= 32768
         self._player.play(fsamples)
 
-    def _process_iq_samples_raw(self, seq, data):
+    def _process_stereo_samples_raw(self, seq, data):
         if self._options.quiet is False:
             sys.stdout.write('\rBlock: %08x' % seq)
             sys.stdout.flush()
@@ -183,7 +183,7 @@ class KiwiSoundRecorder(KiwiSDRStream):
     # phase for frequency shift
     startph = np.float32(0)
 
-    def _process_iq_samples(self, seq, samples, rssi, gps):
+    def _process_iq_samples(self, seq, samples, rssi, gps, fmt):
         if self._options.quiet is False:
             sys.stdout.write('\rBlock: %08x, RSSI: %6.1f' % (seq, rssi))
             sys.stdout.flush()
@@ -527,6 +527,7 @@ def main():
     options.is_kiwi_wav = False
     options.is_kiwi_tdoa = False
     options.wf_cal = None
+    options.netcat = False
     options.wideband = False
 
     gopt = options
@@ -536,7 +537,7 @@ def main():
     for i,opt in enumerate(options):
         opt.multiple_connections = multiple_connections
         opt.idx = i
-        snd_recorders.append(KiwiWorker(args=(KiwiSoundRecorder(opt),opt,run_event)))
+        snd_recorders.append(KiwiWorker(args=(KiwiSoundRecorder(opt),opt,False,run_event)))
 
     try:
         for i,r in enumerate(snd_recorders):

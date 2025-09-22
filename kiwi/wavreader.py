@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- python -*-
 
 try:
@@ -6,7 +7,12 @@ except ImportError:
     import collections as collectionsAbc
 import struct
 import numpy as np
-from chunk import Chunk
+
+# so chunk module is found when doing "python3 kiwi/wavreader.py"
+# in kiwiclient top-level directory
+import sys, os
+sys.path.insert(0, os.path.abspath('.'))
+from chunk import Chunk # local copy from standard-chunk
 
 class KiwiIQWavError(Exception):
     pass
