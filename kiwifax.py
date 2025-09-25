@@ -24,11 +24,14 @@ import png
 
 
 def dump_to_csv(filename, data, mode='a'):
-    with open(filename, mode) as fp:
-        for x in data:
-            fp.write("%.6f," % x)
-        fp.write("\n")
-
+    try :
+        with open(filename, mode) as fp:
+            for x in data:
+                fp.write("%.6f," % x)
+            fp.write("\n")
+        logging.info('Dump to csv file %s done' % filename)
+    except Exception as e:
+        logging.error('Dump to csv file %s Error %s' % (filename, e))
 
 def clamp(x, xmin, xmax):
     if x < xmin:
@@ -47,7 +50,6 @@ def fm_detect(X, prev, shift):
         vals.append(y)
         prev = x
     return vals
-
 
 def dft_complex(input):
     width = len(input)
@@ -156,7 +158,6 @@ def peak_detect(data, thresh):
             data[i] = -999
     return peaks
 
-
 class FMDetectorAtan2:
     def __init__(self):
         self._prev = complex(0)
@@ -195,7 +196,6 @@ class IQConverterFFT:
         for i in range(w, len(X)):
             Y.append(complex(1e-6))
         return ifft_complex(Y)
-
 
 def interp_hermite(t, p0, p1, p2, p3):
     c0 = p1
@@ -365,7 +365,7 @@ class KiwiFax(KiwiSDRStream):
             self._new_roll()
             self._phasing_count = 0
         elif new_state == 'printing':
-            self._startstop_score = 1
+            self._startstop_score = 0
         elif new_state == 'stopping':
             pass
 
@@ -416,13 +416,13 @@ class KiwiFax(KiwiSDRStream):
         self._black_level = (2 * (RADIOFAX_BLACK_FREQ - RADIOFAX_STARTSTOP_FREQ) / sample_rate) + contrast + shift
         self._fc_factor = 2 * self._bin_size / sample_rate
 
-    def _process_audio_samples(self, seq, samples, rssi):
+    def _process_audio_samples(self, seq, samples, rssi, fmt):
         k = 1 / 32768.0
         samples = [ x * k for x in samples ]
         samples = self._iqconverter.process(samples)
         self._process_samples(seq, samples, rssi)
 
-    def _process_iq_samples(self, seq, samples, rssi, gps):
+    def _process_iq_samples(self, seq, samples, rssi, gps, fmt):
         k = 1 / 32768.0
         samples = [ x * k for x in samples ]
         self._process_samples(seq, samples, rssi)
@@ -483,31 +483,59 @@ class KiwiFax(KiwiSDRStream):
         detect_start576H = False
         detect_stopL = False
         detect_stopH = False
+        # 新增变量，用于检测是否存在黑信号、白信号和图像信号
+        detect_black = False
+        detect_white = False
+        detect_image_data = False
         # Classify the peaks
         for peak_bin, peak_power in peaks:
             # Try to classify the peak
             # Don't apply tuning correction for the start/stop center peak
             if math.fabs(peak_bin - self._startstop_center_bin) < self._ss_width:
                 # NOTE: If force started, this doesn't get triggered properly
-                if self._state in ('idle', 'starting'):
+                if self._state in ('idle', 'starting', 'phasing', 'printing'):
                     self._tuning_offset = self._startstop_center_bin - peak_bin
                 detect_startstop = True
             else:
                 peak_bin_relative = peak_bin + self._tuning_offset - self._startstop_center_bin
-                if math.fabs(peak_bin_relative - self._stop_delta) < self._ss_tone_width * 1.2 :
+                _tone_rate = 1     #_tone_rate = 1.2
+                # 新增逻辑：检测黑信号（1900 - 400 = 1500Hz）
+                black_delta = int((RADIOFAX_STARTSTOP_FREQ - RADIOFAX_BLACK_FREQ) / self._bin_size)
+                if math.fabs(peak_bin_relative + black_delta) < self._ss_tone_width * _tone_rate:
+                    detect_black = True
+                # 新增逻辑：检测白信号（1900 + 400 = 2300Hz）
+                white_delta = int((RADIOFAX_WHITE_FREQ - RADIOFAX_STARTSTOP_FREQ) / self._bin_size)
+                if math.fabs(peak_bin_relative + white_delta) < self._ss_tone_width * _tone_rate:
+                    detect_white = True
+                # 新增逻辑：检测是否存在任何图像数据（黑到白之间的频率）
+                # 检查频率是否在 1500Hz 到 2300Hz 之间
+                if black_delta < peak_bin_relative < white_delta:
+                    detect_image_data = True
+
+                if math.fabs(peak_bin_relative - self._stop_delta) < self._ss_tone_width * _tone_rate:
                     detect_stopL = True
-                if math.fabs(peak_bin_relative + self._stop_delta) < self._ss_tone_width * 1.2:
+                if math.fabs(peak_bin_relative + self._stop_delta) < self._ss_tone_width * _tone_rate:
                     detect_stopH = True
-                if math.fabs(peak_bin_relative - self._start576_delta) < self._ss_tone_width * 1.2:
+                if math.fabs(peak_bin_relative - self._start576_delta) < self._ss_tone_width * _tone_rate:
                     detect_start576L = True
-                if math.fabs(peak_bin_relative + self._start576_delta) < self._ss_tone_width * 1.2:
+                if math.fabs(peak_bin_relative + self._start576_delta) < self._ss_tone_width * _tone_rate:
                     detect_start576H = True
         detect_start576 = detect_startstop and detect_start576L and detect_start576H
         detect_stop = detect_startstop and detect_stopL and detect_stopH
+        # Determine if we should update the score
+        update_score = False
         if self._state in ('idle', 'starting'):
-            self._startstop_score_update(detect_start576)
-        else:
-            self._startstop_score_update(detect_stop)
+            update_score = detect_start576
+        elif self._state == 'phasing':
+            # 在定相阶段不检测停止音
+            update_score = False
+        elif self._state == 'printing':
+            if detect_stop and not detect_image_data:
+                update_score = True
+            else:
+                update_score = False
+        logging.debug("detect_stop: %s, detect_black: %s, detect_white: %s, detect_start576: %s, detect_startstop: %s, detect_start576L: %s, detect_start576H: %s, detect_stopL: %s, detect_stopH: %s, detect_image_data: %s", detect_stop, detect_black, detect_white, detect_start576, detect_startstop, detect_start576L, detect_start576H, detect_stopL, detect_stopH, detect_image_data)
+        self._startstop_score_update(update_score)
 
         logging.info("NF=%05.1f PK=%05.1f  TO=%+04d/%+06.2fHz SS=%02d %s%s%s%s%s",
             nf_level, pk_level, self._tuning_offset, self._tuning_offset * self._bin_size,
@@ -522,7 +550,7 @@ class KiwiFax(KiwiSDRStream):
             if self._startstop_score < 3:
                 self._switch_state('phasing')
         elif self._state == 'printing':
-            if self._startstop_score >= 8:
+            if self._startstop_score >= 10:
                 logging.critical("STOP DETECTED")
                 self._switch_state('stopping')
         elif self._state == 'stopping':
@@ -614,6 +642,7 @@ class KiwiFax(KiwiSDRStream):
             with open(self._output_name + '.png', 'wb') as fp:
                 try:
                     png.Writer(len(self._rows[0]), len(self._rows), greyscale=True).write(fp, self._rows)
+                    logging.info('Output png file: %s.png', self._output_name)
                     break
                 except KeyboardInterrupt:
                     pass
@@ -694,7 +723,7 @@ def main():
                       dest='force',
                       action='store_true', default=False,
                       help='Force the decoding without waiting for start tone or phasing')
-    parser.add_option('-d', '--debug',
+    parser.add_option('-D', '--debug',
                       dest='debug',
                       action='store_true', default=False,
                       help='Show DEBUG info and write DEBUG to logfile')
