@@ -29,7 +29,6 @@ def dump_to_csv(filename, data, mode='a'):
             for x in data:
                 fp.write("%.6f," % x)
             fp.write("\n")
-        logging.info('Dump to csv file %s done' % filename)
     except Exception as e:
         logging.error('Dump to csv file %s Error %s' % (filename, e))
 
@@ -566,6 +565,7 @@ class KiwiFax(KiwiSDRStream):
             self._output_name += '_' + self._options.station
         if self._options.path:
             self._output_name = os.path.join(self._options.path, self._output_name)
+        logging.info('Output png file: %s.png', self._output_name)
 
     def _process_pixels(self, samples):
         if not self._state in ('phasing', 'printing', 'stopping'):
@@ -645,12 +645,11 @@ class KiwiFax(KiwiSDRStream):
                     break
                 except KeyboardInterrupt:
                     pass
-            logging.info('Output png file: %s.png', self._output_name)
         # DUMP POINT
         if self._options.dump_histo:
             dump_to_csv(self._output_name + '-hh.csv', self._histoa.get(), 'w')
             dump_to_csv(self._output_name + '-hh.csv', self._histob.get(), 'a')
-
+            logging.info('Dump to csv file %s-hh.csv' % self._output_name)
 
 KNOWN_CORRECTION_FACTORS = {
     'kiwisdr.northlandradio.nz:8073': {
