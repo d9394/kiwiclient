@@ -1,5 +1,4 @@
 #!/bin/sh
-
 # 初始化变量
 ServerIP=""
 ServerPort="-p 8073"
@@ -11,7 +10,7 @@ custom_option=""
 Debug=""
 Once=""
 
-#cd /Script/kiwiclient
+cd /Script/kiwiclient
 BasePATH=$(pwd)
 FaxPath="${BasePATH}/Fax"
 LogPath="/Logs"
@@ -65,17 +64,18 @@ if [[ -z "$ServerIP" || -z "$Frequency" ]]; then
 else
 
 	DATE_TIME=$(date -u "+%Y%m%dT%H%MZ")
-	echo -e "http://${ServerIP:3}:${ServerPort:3}/?ext=fax,${Frequency:3}&u=swler&no_geoloc&m" | mail -s "kiwifax ${Callsign:10} start to recveive" test@test.com
+	#wget -O- -T 5 -q "http://192.168.103.1:8001/?usr=chenbingzhi&from=kiwifax&msg=start%20receive%20http%3A%2F%2F${ServerIP:3}:${ServerPort:3}%2F%3Fext%3Dfax%2C${Frequency:3}%26u%3Dswler%26no_geoloc%26m%20%2Ccallsign%20${Callsign:10}%20%23%20$DATE_TIME" &
+	#echo -e "http://${ServerIP:3}:${ServerPort:3}/?ext=fax,${Frequency:3}&u=swler&no_geoloc&m" | mail -s "kiwifax ${Callsign:10}" ch9@163.com
 	if [[ "$Once" != "" ]]; then
-		Command="timeout -s KILL 1780"
+		Command="timeout -s KILL 1300"   #1780=29*60
 	else
 		Command=""
 	fi
-	Command="${Command}"" /usr/bin/python3 -u ${BasePATH}/kiwifax.py ${ServerIP} ${Frequency} ${ServerPort} ${ServerPassword} $Callsign $Force $Debug $Once $custom_option --path ${FaxPath} &"
+	Command="${Command}"" /usr/bin/python3 -u ${BasePATH}/kiwifax.py ${ServerIP} ${Frequency} ${ServerPort} ${ServerPassword} $Callsign $Force $Debug $Once $custom_option --path ${FaxPath} 2>&1 &"
 	# 输出构建的命令
 	echo "构建的命令: $Command"
 	# 执行命令（如果需要）
-	eval "$Command"
+	eval "$Command" 
 	#/usr/bin/python3 -u $BasePATH/kiwifax.py -s 192.168.103.232 --pw=mkmz -f $FREQ_KHZ --force-start --once --debug --iq-stream --station=$Callsign --max-height=3600 --tlimit=1780 $OTHER_OPTIONS &
 	#LOG=$(ls -lt log*${FREQ//./}*.log 2>/dev/null | awk '{print $9}' | head -1)
 	#echo LOG file $LOG
@@ -101,10 +101,20 @@ else
 	FREQ_HZ=$(echo "scale=0; ${Frequency:3} * 1000 / 1" | bc )
 	PIC="${FaxPath}/${DATE_TIME}_${FREQ_HZ}_${Callsign:10}.png"
 	if [ -f $PIC ]; then
-		/usr/bin/python3 -u $BasePATH/img_process.py $PIC
-		echo -e "http://${ServerIP:3}:${ServerPort:3}/?ext=fax,${Frequency:3}&u=swler&no_geoloc&m" | mailx -s "kiwifax ${Callsign:10} received" -A $PIC test@test.com
+		IGNORE_LIST="MMC|TEST"
+		case "$CALLSIGN" in
+			$IGNORE_LIST)
+				echo Pass img_process
+				;;
+			*)
+				/usr/bin/python3 -u $BasePATH/img_process.py $PIC
+				;;
+		esac
+		curl -m 300 -s -F "file=@$PIC" -F "usr=chenbingzhi" -F "from=kiwifax" -F "msg=$PIC" "http://192.168.103.1:8001"
+		#wget -O- -q --post-file=$BasePATH/$PIC "http://192.168.103.1:8001/?usr=chenbingzhi&from=kiwifax&msg=$PIC" &
 		#rm -f $PIC
 	else
-		echo $pic Not Found
+		#wget -O- -T 5 -q "http://192.168.103.1:8001/?usr=chenbingzhi&from=kiwifax&msg=$PIC%20File%20Not%20Found,%20http%3A%2F%2F${ServerIP:3}%3A${ServerPort:3}%2F%3Fext%3Dfax%2C${Frequency:3}%26u%3Dswler%26no_geoloc%26m%20,${Callsign:10}"
+		echo 接收的图像 $PIC , Not Found
 	fi
 fi
