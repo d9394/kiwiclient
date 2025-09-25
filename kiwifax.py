@@ -642,10 +642,10 @@ class KiwiFax(KiwiSDRStream):
             with open(self._output_name + '.png', 'wb') as fp:
                 try:
                     png.Writer(len(self._rows[0]), len(self._rows), greyscale=True).write(fp, self._rows)
-                    logging.info('Output png file: %s.png', self._output_name)
                     break
                 except KeyboardInterrupt:
                     pass
+            logging.info('Output png file: %s.png', self._output_name)
         # DUMP POINT
         if self._options.dump_histo:
             dump_to_csv(self._output_name + '-hh.csv', self._histoa.get(), 'w')
