@@ -273,7 +273,7 @@ class Writer:
         if len(data):
             compressed = compressor.compress(data.tobytes())
         else:
-            compressed = ''
+            compressed = b''
         flushed = compressor.flush()
         if len(compressed) or len(flushed):
             # print >> sys.stderr, len(data), len(compressed), len(flushed)
